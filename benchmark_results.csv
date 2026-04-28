@@ -1,0 +1,94 @@
+dataset,formula,expected,baseline_proved,baseline_time,baseline_steps,improved_proved,improved_time,improved_steps
+Propositional Tautologies,B → B,True,True,0.000017,2,True,0.000012,1
+Propositional Tautologies,E ∨ ¬E,True,True,0.000012,3,True,0.000010,1
+Propositional Tautologies,¬¬D → D,True,True,0.000013,4,True,0.000008,1
+Propositional Tautologies,B → ¬¬B,True,True,0.000016,4,True,0.000008,1
+Propositional Tautologies,(B → E) → (¬E → ¬B),True,True,0.000020,7,True,0.000031,3
+Propositional Tautologies,(G → A) → ((¬G → A) → A),True,True,0.000024,8,True,0.000032,5
+Propositional Tautologies,A → (H → A),True,True,0.000008,3,True,0.000007,1
+Propositional Tautologies,(D → (B → A)) → (B → (D → A)),True,True,0.000021,8,True,0.000026,5
+Propositional Tautologies,((D → F) ∧ (F → G)) → (D → G),True,True,0.000023,8,True,0.000028,5
+Propositional Tautologies,(D ∧ H) → (H ∧ D),True,True,0.000013,5,True,0.000015,3
+Propositional Tautologies,(E ∨ G) → (G ∨ E),True,True,0.000012,5,True,0.000015,3
+Propositional Tautologies,A → (A ∨ G),True,True,0.000007,3,True,0.000007,1
+Propositional Tautologies,(C ∧ F) → C,True,True,0.000007,3,True,0.000007,1
+Propositional Tautologies,(¬G ∨ C) → (G → C),True,True,0.000127,6,True,0.000037,3
+Propositional Tautologies,(E → B) → (¬E ∨ B),True,True,0.000021,6,True,0.000018,3
+Propositional Tautologies,D → D,True,True,0.000006,2,True,0.000005,1
+Propositional Tautologies,F ∨ ¬F,True,True,0.000007,3,True,0.000005,1
+Propositional Tautologies,¬¬B → B,True,True,0.000009,4,True,0.000007,1
+Propositional Tautologies,B → ¬¬B,True,True,0.000009,4,True,0.000007,1
+Propositional Tautologies,(F → E) → (¬E → ¬F),True,True,0.000018,7,True,0.000017,3
+Propositional Tautologies,(E → G) → ((¬E → G) → G),True,True,0.000021,8,True,0.000028,5
+Propositional Tautologies,A → (F → A),True,True,0.000012,3,True,0.000008,1
+Propositional Tautologies,(H → (E → B)) → (E → (H → B)),True,True,0.000023,8,True,0.000026,5
+Propositional Tautologies,((G → A) ∧ (A → E)) → (G → E),True,True,0.000021,8,True,0.000025,5
+Propositional Tautologies,(F ∧ E) → (E ∧ F),True,True,0.000013,5,True,0.000015,3
+Propositional Tautologies,(D ∨ F) → (F ∨ D),True,True,0.000013,5,True,0.000015,3
+Propositional Tautologies,B → (B ∨ A),True,True,0.000007,3,True,0.000007,1
+Propositional Tautologies,(D ∧ G) → D,True,True,0.000007,3,True,0.000014,1
+Propositional Tautologies,(¬E ∨ A) → (E → A),True,True,0.000015,6,True,0.000017,3
+Propositional Tautologies,(D → G) → (¬D ∨ G),True,True,0.000014,6,True,0.000015,3
+Propositional Non-Tautologies,A → C,False,False,0.000018,2,False,0.000132,20
+Propositional Non-Tautologies,C ∧ D,False,False,0.000010,2,False,0.000142,40
+Propositional Non-Tautologies,(F ∨ H) → (F ∧ H),False,False,0.000019,5,False,0.000436,80
+Propositional Non-Tautologies,(B → D) → (D → B),False,False,0.000020,4,False,0.000246,40
+Propositional Non-Tautologies,(H → E) → H,False,False,0.000016,3,False,0.000222,40
+Propositional Non-Tautologies,(A ∨ E) ∧ (¬A ∧ ¬E),False,False,0.000021,3,False,0.000278,40
+Propositional Non-Tautologies,¬G → G,False,False,0.000024,3,False,0.000116,20
+Propositional Non-Tautologies,F ∧ ¬F,False,False,0.000015,2,False,0.000162,40
+Propositional Non-Tautologies,G → D,False,False,0.000014,2,False,0.000167,20
+Propositional Non-Tautologies,C ∧ A,False,False,0.000010,2,False,0.000226,40
+Propositional Non-Tautologies,(B ∨ G) → (B ∧ G),False,False,0.000019,5,False,0.000406,80
+Propositional Non-Tautologies,(B → D) → (D → B),False,False,0.000016,4,False,0.000308,40
+Propositional Non-Tautologies,(C → A) → C,False,False,0.000012,3,False,0.000233,40
+Propositional Non-Tautologies,(C ∨ E) ∧ (¬C ∧ ¬E),False,False,0.000020,3,False,0.000254,40
+Propositional Non-Tautologies,¬H → H,False,False,0.000010,3,False,0.000110,20
+Propositional Non-Tautologies,G ∧ ¬G,False,False,0.000009,2,False,0.000144,40
+Propositional Non-Tautologies,E → H,False,False,0.000008,2,False,0.000124,20
+Propositional Non-Tautologies,C ∧ D,False,False,0.000011,2,False,0.000164,40
+Propositional Non-Tautologies,(B ∨ A) → (B ∧ A),False,False,0.000019,5,False,0.000347,80
+Propositional Non-Tautologies,(A → B) → (B → A),False,False,0.000054,4,False,0.000269,40
+FOL Valid,forall x. P(x) -> forall x. P(x),True,True,0.000014,2,True,0.000038,2
+FOL Valid,forall x. P(x) -> exists x. P(x),True,True,0.000038,4,True,0.000064,8
+FOL Valid,~(forall x. P(x)) -> exists x. ~P(x),True,True,0.000049,8,True,0.000035,3
+FOL Valid,~(exists x. P(x)) -> forall x. ~P(x),True,True,0.000052,7,True,0.000037,2
+FOL Valid,forall x. ~P(x) -> ~(exists x. P(x)),True,True,0.000043,8,True,0.000031,3
+FOL Valid,exists x. ~P(x) -> ~(forall x. P(x)),True,True,0.000036,7,True,0.000023,2
+FOL Valid,forall x. (P(x) -> Q(x)) -> (forall x. P(x) -> forall x. Q(x)),True,True,0.000142,16,True,0.000149,19
+FOL Valid,forall x. (P(x) -> Q(x)) -> (exists x. P(x) -> exists x. Q(x)),True,True,0.000117,16,True,0.000223,34
+FOL Valid,exists x. (P(x) & Q(x)) -> (exists x. P(x) & exists x. Q(x)),True,True,0.000065,10,True,0.000057,5
+FOL Valid,(forall x. P(x)) & (forall x. Q(x)) -> forall x. (P(x) & Q(x)),True,True,0.000085,12,True,0.000057,7
+FOL Valid,(exists x. P(x)) | (exists x. Q(x)) -> exists x. (P(x) | Q(x)),True,True,0.000113,14,True,0.000055,5
+FOL Valid,forall x. (P(x) & Q(x)) -> (forall x. P(x)) & (forall x. Q(x)),True,True,0.000084,14,True,0.000052,5
+FOL Valid,"forall x. forall y. R(x, y) -> forall y. forall x. R(x, y)",True,True,0.000257,17,True,0.000171,19
+FOL Valid,"exists x. exists y. R(x, y) -> exists y. exists x. R(x, y)",True,True,0.000127,11,True,0.000166,19
+FOL Valid,forall x. (P(x) | Q(x)) -> (forall x. P(x)) | (exists x. Q(x)),True,True,0.000123,16,True,0.000247,34
+FOL Valid,(forall x. P(x)) | (forall x. Q(x)) -> forall x. (P(x) | Q(x)),True,True,0.000078,10,True,0.000044,5
+FOL Valid,"exists x. forall y. R(x, y) -> forall y. exists x. R(x, y)",True,True,0.000119,10,True,0.000227,29
+FOL Valid,forall x. P(x) -> ~~(forall x. P(x)),True,True,0.000015,4,True,0.000024,2
+FOL Valid,forall x. (P(x) -> P(x)),True,True,0.000013,3,True,0.000012,1
+FOL Valid,exists x. (P(x) | ~P(x)),True,True,0.000022,4,True,0.000019,2
+FOL Valid,"forall x. forall y. (R(x, y) -> R(x, y))",True,True,0.000023,4,True,0.000020,1
+FOL Valid,~(exists x. (P(x) & ~P(x))),True,True,0.000019,5,True,0.000015,1
+FOL Valid,(forall x. P(x) -> Q(x)) -> (~(exists x. Q(x)) -> ~(exists x. P(x))),True,False,10.003594,13300,False,7.481429,171823
+FOL Valid,"forall x. (P(x) -> exists y. R(x, y)) -> (forall x. P(x) -> forall x. exists y. R(x, y))",True,True,1.435592,47200,True,0.000442,42
+FOL Valid,exists x. P(x) -> ~~(exists x. P(x)),True,True,0.000018,4,True,0.000035,2
+FOL Invalid,exists x. P(x) -> forall x. P(x),False,False,0.000024,4,False,0.000349,20
+FOL Invalid,"forall y. exists x. R(x, y) -> exists x. forall y. R(x, y)",False,False,1.571162,50001,False,2.016463,109369
+FOL Invalid,(exists x. P(x)) & (exists x. Q(x)) -> exists x. (P(x) & Q(x)),False,False,10.000229,37996,False,3.116266,290080
+FOL Invalid,forall x. (P(x) | Q(x)) -> (forall x. P(x)) | (forall x. Q(x)),False,False,10.023131,38009,False,3.007607,290080
+FOL Invalid,exists x. P(x) & exists x. Q(x) -> forall x. (P(x) & Q(x)),False,False,0.000052,7,False,0.000651,40
+FOL Invalid,forall x. P(x) | forall x. Q(x) -> forall x. (P(x) & Q(x)),False,False,10.049302,13892,False,0.637445,16880
+Hard FOL (Stress Test),forall x. (P(x) -> Q(x)) -> (forall x. P(x) -> forall x. Q(x)),True,True,0.000159,16,True,0.000158,19
+Hard FOL (Stress Test),forall x. (P(x) -> Q(x)) -> (exists x. P(x) -> exists x. Q(x)),True,True,0.000156,16,True,0.000227,34
+Hard FOL (Stress Test),"forall x. forall y. (R(x, y) -> R(x, y))",True,True,0.000029,4,True,0.000024,1
+Hard FOL (Stress Test),"exists x. forall y. R(x, y) -> forall y. exists x. R(x, y)",True,True,0.000110,10,True,0.000188,29
+Hard FOL (Stress Test),(forall x. (P(x) -> Q(x))) & (forall x. (Q(x) -> R(x))) -> (forall x. (P(x) -> R(x))),True,True,0.000241,29,True,0.000230,26
+Hard FOL (Stress Test),~(exists x. P(x)) -> forall x. ~P(x),True,True,0.000040,7,True,0.000025,2
+Hard FOL (Stress Test),~(forall x. P(x)) -> exists x. ~P(x),True,True,0.000062,8,True,0.000052,3
+Hard FOL (Stress Test),forall x. ~P(x) -> ~(exists x. P(x)),True,True,0.000057,8,True,0.000043,3
+Hard FOL (Stress Test),exists x. ~P(x) -> ~(forall x. P(x)),True,True,0.000050,7,True,0.000035,2
+Hard FOL (Stress Test),exists x. P(x) -> forall x. P(x),False,False,0.000022,4,False,0.000295,20
+Hard FOL (Stress Test),"forall y. exists x. R(x, y) -> exists x. forall y. R(x, y)",False,False,1.574043,50001,False,1.806520,109369
+Hard FOL (Stress Test),(exists x. P(x)) & (exists x. Q(x)) -> exists x. (P(x) & Q(x)),False,False,10.001729,37913,False,2.983611,290080

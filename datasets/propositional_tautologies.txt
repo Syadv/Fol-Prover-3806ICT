@@ -1,0 +1,58 @@
+# Propositional Tautologies Dataset
+# Source: Generated — standard tautologies from propositional logic
+# Each line contains one formula that should be valid.
+
+# Identity
+A -> A
+
+# Excluded middle
+A | ~A
+
+# Double negation elimination
+~~A -> A
+A -> ~~A
+
+# Contrapositive
+(A -> B) -> (~B -> ~A)
+
+# Proof by cases
+(A -> B) -> ((~A -> B) -> B)
+
+# Syllogism / transitivity
+(A -> B) -> ((B -> C) -> (A -> C))
+((A -> B) & (B -> C)) -> (A -> C)
+
+# Commutativity
+(A & B) -> (B & A)
+(A | B) -> (B | A)
+
+# Weakening / strengthening
+(A & B) -> A
+A -> (A | B)
+
+# Material implication
+(A -> B) -> (~A | B)
+(~A | B) -> (A -> B)
+
+# Permutation
+(A -> (B -> C)) -> (B -> (A -> C))
+
+# Distribution
+(A & (B | C)) -> ((A & B) | (A & C))
+((A & B) | (A & C)) -> (A & (B | C))
+(A | (B & C)) -> ((A | B) & (A | C))
+
+# De Morgan
+~(A & B) -> (~A | ~B)
+(~A | ~B) -> ~(A & B)
+~(A | B) -> (~A & ~B)
+(~A & ~B) -> ~(A | B)
+
+# Peirce's law
+((A -> B) -> A) -> A
+
+# Complex tautologies
+((A -> B) & (C -> D)) -> ((A & C) -> (B & D))
+((A -> B) & (C -> D)) -> ((A | C) -> (B | D))
+(A -> (B -> C)) -> ((A & B) -> C)
+((A & B) -> C) -> (A -> (B -> C))

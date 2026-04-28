@@ -1,0 +1,65 @@
+# First-Order Logic Benchmark Dataset
+# Source: Generated — standard valid/invalid FOL formulae
+# Lines starting with # are comments.
+# Lines starting with ## INVALID mark the start of invalid formulae.
+
+# ─── VALID FORMULAE ──────────────────────────────────────────────
+# These should all be provable.
+
+# Identity
+forall x. P(x) -> forall x. P(x)
+
+# Universal to existential
+forall x. P(x) -> exists x. P(x)
+
+# De Morgan for quantifiers
+~(forall x. P(x)) -> exists x. ~P(x)
+~(exists x. P(x)) -> forall x. ~P(x)
+forall x. ~P(x) -> ~(exists x. P(x))
+exists x. ~P(x) -> ~(forall x. P(x))
+
+# Quantifier distribution (valid directions)
+forall x. (P(x) -> Q(x)) -> (forall x. P(x) -> forall x. Q(x))
+forall x. (P(x) -> Q(x)) -> (exists x. P(x) -> exists x. Q(x))
+exists x. (P(x) & Q(x)) -> (exists x. P(x) & exists x. Q(x))
+(forall x. P(x)) & (forall x. Q(x)) -> forall x. (P(x) & Q(x))
+forall x. (P(x) & Q(x)) -> (forall x. P(x)) & (forall x. Q(x))
+(exists x. P(x)) | (exists x. Q(x)) -> exists x. (P(x) | Q(x))
+(forall x. P(x)) | (forall x. Q(x)) -> forall x. (P(x) | Q(x))
+
+# Quantifier reordering
+forall x. forall y. R(x, y) -> forall y. forall x. R(x, y)
+exists x. exists y. R(x, y) -> exists y. exists x. R(x, y)
+exists x. forall y. R(x, y) -> forall y. exists x. R(x, y)
+
+# Nested quantifier tautologies
+forall x. (P(x) -> P(x))
+exists x. (P(x) | ~P(x))
+forall x. forall y. (R(x, y) -> R(x, y))
+~(exists x. (P(x) & ~P(x)))
+
+# Contrapositive with quantifiers
+(forall x. P(x) -> Q(x)) -> (~(exists x. Q(x)) -> ~(exists x. P(x)))
+
+# Transitivity with quantifiers
+(forall x. (P(x) -> Q(x))) & (forall x. (Q(x) -> R(x))) -> (forall x. (P(x) -> R(x)))
+
+# Double negation
+forall x. P(x) -> ~~(forall x. P(x))
+exists x. P(x) -> ~~(exists x. P(x))
+
+# ─── INVALID FORMULAE ───────────────────────────────────────────
+# These should NOT be provable.
+
+## INVALID
+# Barcan converse (invalid in FOL)
+exists x. P(x) -> forall x. P(x)
+
+# Quantifier swap (invalid direction)
+forall y. exists x. R(x, y) -> exists x. forall y. R(x, y)
+
+# Existential distribution over conjunction (invalid)
+(exists x. P(x)) & (exists x. Q(x)) -> exists x. (P(x) & Q(x))
+
+# Universal distribution over disjunction (invalid)
+forall x. (P(x) | Q(x)) -> (forall x. P(x)) | (forall x. Q(x))
