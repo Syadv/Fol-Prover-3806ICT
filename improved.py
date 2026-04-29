@@ -1,31 +1,25 @@
 """
-Improved backward proof search for first-order logic using LK'.
+Improved version of Algorithm 2.
 
-Improvements over the baseline (Algorithm 2):
+Five things on top of the baseline:
 
-1. **Iterative deepening on quantifier depth**:
-   Limits the number of ∀L/∃R instantiations per branch, incrementally
-   increasing the limit. Guarantees termination per iteration while
-   maintaining completeness via iterative increase.
+1. Iterative deepening on the number of forall L / exists R
+   instantiations per branch. Caps it at k, retries with k+1, etc.
+   This is the big one - it's what stops invalid formulae from
+   running forever.
 
-2. **Subsumption / loop detection**:
-   Caches visited sequents (as frozenset pairs). If we revisit the same
-   sequent on the same branch, we prune it immediately.
+2. Visited-sequent cache. If we've already worked on the same
+   (gamma, delta) pair on this branch, give up immediately.
 
-3. **Smarter term selection for ∀L/∃R**:
-   Instead of trying arbitrary terms, we prioritise terms that appear on
-   the *opposite* side of the sequent (heuristic: terms in the succedent
-   for ∀L, terms in the antecedent for ∃R). This mimics a lightweight
-   form of goal-directed instantiation.
+3. Smarter term selection. For forall L, try terms from delta
+   first, since those are what we're trying to match. Same idea
+   for exists R but with gamma. Mostly a guess but it helps.
 
-4. **Eager rule application**:
-   Non-branching invertible rules are applied eagerly in a saturation
-   loop before considering branching or quantifier rules. This reduces
-   the search tree by decomposing the sequent as much as possible first.
+4. Saturate with non-branching invertible rules before doing
+   anything else. They're invertible so it's always safe.
 
-5. **Formula complexity heuristic**:
-   When multiple branching rules are applicable, we apply the one on the
-   smallest formula first (fewer sub-goals tend to be easier to close).
+5. When several branching rules apply, pick the one with the
+   smallest formula. Tiny effect but doesn't hurt.
 """
 from __future__ import annotations
 from formula import *
@@ -56,7 +50,8 @@ class ProofResult:
 
 
 def _formula_size(f: Formula) -> int:
-    """Rough measure of formula complexity for ordering heuristics."""
+    """How big is this formula? Just count operators recursively.
+    Used for the size heuristic in improvement 5."""
     if isinstance(f, (Top, Bot, Pred)):
         return 1
     if isinstance(f, Not):
@@ -82,7 +77,9 @@ class ImprovedProver:
 
     def prove(self, formula: Formula) -> ProofResult:
         """
-        Prove validity of formula using iterative deepening on quantifier depth.
+        Outer loop - iterative deepening on the quantifier limit.
+        Try k=1, then k=2, etc until either we find a proof or hit
+        the global timeout.
         """
         self.steps = 0
         self.start_time = time.time()
@@ -91,8 +88,10 @@ class ImprovedProver:
         gamma = frozenset()
         delta = frozenset({formula})
 
-        # Improvement 1: Iterative deepening on quantifier instantiation limit
+        # improvement 1: iterative deepening
         for qlimit in range(1, self.max_quant_limit + 1):
+            # reset state for each iteration - the visited cache and
+            # fresh constants don't carry over between rounds
             self.fresh = FreshNameGenerator()
             self.steps = 0
             self.visited = set()
@@ -110,7 +109,7 @@ class ImprovedProver:
                 elapsed = time.time() - self.start_time
                 return ProofResult(True, total_steps, elapsed, quant_limit=qlimit)
 
-            # Check global timeout
+            # quick check before next round
             if time.time() - self.start_time > self.timeout:
                 break
 
@@ -120,38 +119,38 @@ class ImprovedProver:
     def _check_limits(self):
         self.steps += 1
         if self.steps > self.max_steps:
-            raise TimeoutError("Step limit exceeded")
+            raise TimeoutError("hit step limit")
         if time.time() - self.start_time > self.timeout:
-            raise TimeoutError("Time limit exceeded")
+            raise TimeoutError("hit time limit")
 
     def _search(self, gamma: frozenset, delta: frozenset,
                 depth: int, quant_depth: int, quant_limit: int) -> bool:
         """
-        Backward proof search with improvements.
-        quant_depth: how many ∀L/∃R instantiations on this branch so far.
-        quant_limit: max allowed instantiations per branch (iterative deepening parameter).
+        Inner search.
+        quant_depth is how many forall L / exists R we've done on this
+        branch so far. quant_limit is the cap from iterative deepening.
         """
         self._check_limits()
 
         if depth > self.max_depth:
             return False
 
-        # ─── Improvement 2: Subsumption / loop detection ────────────
+        # improvement 2: have we seen this sequent before, if yes, skip
         seq_key = (gamma, delta)
         if seq_key in self.visited:
             return False
         self.visited.add(seq_key)
 
-        # ─── Improvement 4: Eager saturation of non-branching rules ─
+        # improvement 4: saturate with invertible rules first
         gamma, delta = self._saturate(gamma, delta)
 
-        # ─── Step 1: Check closure after saturation ─────────────────
+        # closure check 
         if self._is_closed(gamma, delta):
             return True
 
-        # ─── Step 3: Branching rules (sorted by formula size — Improvement 5) ──
+        # branching rules - improvement 5: smallest formula first
 
-        # Collect all branching candidates
+        # build list of candidates with their sizes
         branch_candidates = []
 
         for f in delta:
@@ -164,7 +163,7 @@ class ImprovedProver:
             if isinstance(f, Imp):
                 branch_candidates.append(('impL', f, _formula_size(f)))
 
-        # Sort by formula size (smallest first — Improvement 5)
+        # sort by size, smallest first
         branch_candidates.sort(key=lambda x: x[2])
 
         for rule, f, _ in branch_candidates:
@@ -174,7 +173,9 @@ class ImprovedProver:
                 if self._search(gamma, d1, depth + 1, quant_depth, quant_limit):
                     if self._search(gamma, d2, depth + 1, quant_depth, quant_limit):
                         return True
-                return False  # if a branching rule is applicable, commit
+                # if a branching rule was applicable but failed, the
+                # whole branch fails (we don't try other branchings)
+                return False
 
             elif rule == 'orL':
                 g1 = (gamma - {f}) | {f.left}
@@ -193,13 +194,14 @@ class ImprovedProver:
                         return True
                 return False
 
-        # ─── Step 4/5: Quantifier instantiation (with depth limit) ──
+        # quantifier instantiation - capped by quant_limit
         if quant_depth >= quant_limit:
-            return False  # reached instantiation limit for this iteration
+            return False
 
-        # ─── Improvement 3: Smarter term selection ──────────────────
-        # For ∀L, prioritise terms from delta (goal-directed)
-        # For ∃R, prioritise terms from gamma
+        # improvement 3: smarter term selection
+        # for forall L the goal we're trying to match is on the right,
+        # so terms from delta are more likely to lead somewhere useful
+        # for exists R it's the opposite
 
         gamma_terms = set()
         delta_terms = set()
@@ -209,7 +211,7 @@ class ImprovedProver:
             delta_terms |= collect_terms(f)
         all_terms = gamma_terms | delta_terms
 
-        # ∀L: try terms from delta first, then gamma-only terms
+        # forall L: delta terms first, then anything else
         prioritised_terms_forallL = list(delta_terms) + [t for t in gamma_terms if t not in delta_terms]
 
         for f in gamma:
@@ -222,7 +224,7 @@ class ImprovedProver:
                                         quant_depth + 1, quant_limit):
                             return True
 
-        # ∃R: try terms from gamma first, then delta-only terms
+        # exists R: gamma terms first
         prioritised_terms_existsR = list(gamma_terms) + [t for t in delta_terms if t not in gamma_terms]
 
         for f in delta:
@@ -235,7 +237,7 @@ class ImprovedProver:
                                         quant_depth + 1, quant_limit):
                             return True
 
-        # ∀L / ∃R with fresh term
+        # last resort: try a fresh constant
         for f in gamma:
             if isinstance(f, Forall):
                 t = self.fresh.fresh()
@@ -257,7 +259,7 @@ class ImprovedProver:
         return False
 
     def _is_closed(self, gamma: frozenset, delta: frozenset) -> bool:
-        """Check if sequent is axiomatically closed."""
+        """id, top R, bot L all rolled into one check."""
         if gamma & delta:
             return True
         if Top() in delta:
@@ -268,29 +270,33 @@ class ImprovedProver:
 
     def _saturate(self, gamma: frozenset, delta: frozenset):
         """
-        Improvement 4: Eagerly apply all non-branching invertible rules
-        until no more apply. This is sound because these rules are invertible
-        in LK' — applying them never loses provability.
+        Improvement 4. Apply every non-branching invertible rule in a
+        loop until none of them apply. These rules are all invertible
+        so doing them eagerly never costs us a proof.
+
+        I do this by looping with a 'changed' flag and breaking out of
+        each inner for-loop after one application, since modifying the
+        sets we're iterating over would explode.
         """
         changed = True
         while changed:
             changed = False
 
-            # ∧L
+            # and L
             for f in gamma:
                 if isinstance(f, And):
                     gamma = (gamma - {f}) | {f.left, f.right}
                     changed = True
                     break
 
-            # ∨R
+            # or R
             for f in delta:
                 if isinstance(f, Or):
                     delta = (delta - {f}) | {f.left, f.right}
                     changed = True
                     break
 
-            # →R
+            # imp R
             for f in delta:
                 if isinstance(f, Imp):
                     gamma = gamma | {f.left}
@@ -298,7 +304,7 @@ class ImprovedProver:
                     changed = True
                     break
 
-            # ¬L
+            # not L
             for f in gamma:
                 if isinstance(f, Not):
                     gamma = gamma - {f}
@@ -306,7 +312,7 @@ class ImprovedProver:
                     changed = True
                     break
 
-            # ¬R
+            # not R
             for f in delta:
                 if isinstance(f, Not):
                     gamma = gamma | {f.sub}
@@ -314,7 +320,7 @@ class ImprovedProver:
                     changed = True
                     break
 
-            # ∀R (fresh constant)
+            # forall R - need a fresh constant
             for f in delta:
                 if isinstance(f, Forall):
                     a = self.fresh.fresh()
@@ -323,7 +329,7 @@ class ImprovedProver:
                     changed = True
                     break
 
-            # ∃L (fresh constant)
+            # exists L - same
             for f in gamma:
                 if isinstance(f, Exists):
                     a = self.fresh.fresh()
@@ -335,20 +341,17 @@ class ImprovedProver:
         return gamma, delta
 
 
-# ── Convenience ──────────────────────────────────────────────────────
-
 def prove(formula: Formula, **kwargs) -> ProofResult:
     prover = ImprovedProver(**kwargs)
     return prover.prove(formula)
 
 
-# ── Tests ────────────────────────────────────────────────────────────
-
+# tests
 if __name__ == "__main__":
     from parser import parse_formula
 
     test_cases = [
-        # Propositional tautologies
+        # propositional tautologies
         ("A -> A",                                      True),
         ("(A -> B) -> ((~A -> B) -> B)",                True),
         ("A -> (B -> A)",                               True),
@@ -357,10 +360,10 @@ if __name__ == "__main__":
         ("A | ~A",                                      True),
         ("~~A -> A",                                    True),
         ("A -> ~~A",                                    True),
-        ("(A -> B) -> (~B -> ~A)",                      True),   # contrapositive
-        ("((A -> B) & (B -> C)) -> (A -> C)",           True),   # hypothetical syllogism
+        ("(A -> B) -> (~B -> ~A)",                      True),
+        ("((A -> B) & (B -> C)) -> (A -> C)",           True),
 
-        # Propositional non-tautologies
+        # not tautologies
         ("A -> B",                                      False),
         ("A & B",                                       False),
         ("A | B -> A & B",                              False),
@@ -379,16 +382,16 @@ if __name__ == "__main__":
     ]
 
     print("=" * 70)
-    print("IMPROVED PROVER — Enhanced Algorithm 2")
+    print("Improved prover")
     print("=" * 70)
 
     passed = 0
     for text, expected in test_cases:
         f = parse_formula(text)
         result = prove(f, max_steps=50000, max_depth=100, timeout=5.0)
-        ok = "✓" if result.proved == expected else "✗"
+        ok = "OK  " if result.proved == expected else "FAIL"
         if result.proved == expected:
             passed += 1
         print(f"  {ok}  {text:70s}  {result}")
 
-    print(f"\nPassed: {passed}/{len(test_cases)}")
+    print(f"\n{passed}/{len(test_cases)} passed")

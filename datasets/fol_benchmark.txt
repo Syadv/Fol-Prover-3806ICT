@@ -3,7 +3,7 @@
 # Lines starting with # are comments.
 # Lines starting with ## INVALID mark the start of invalid formulae.
 
-# ─── VALID FORMULAE ──────────────────────────────────────────────
+# VALID FORMULAE 
 # These should all be provable.
 
 # Identity
@@ -48,7 +48,7 @@ forall x. forall y. (R(x, y) -> R(x, y))
 forall x. P(x) -> ~~(forall x. P(x))
 exists x. P(x) -> ~~(exists x. P(x))
 
-# ─── INVALID FORMULAE ───────────────────────────────────────────
+# INVALID FORMULAE 
 # These should NOT be provable.
 
 ## INVALID

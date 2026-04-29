@@ -1,26 +1,27 @@
 """
-Parser for first-order logic formulae.
+Parser for FOL formulae.
 
-Accepted syntax (one formula per line):
-  Atoms:       P, Q, R, ...             (propositions — 0-ary predicates)
-               P(x, a, f(x))           (predicates with terms)
-  Constants:   a, b, c, ...            (lowercase single letters or names starting with a-e)
-  Variables:   x, y, z, ...            (lowercase names starting with u-z)
-  Functions:   f(t1, ..., tn)          (lowercase names with parens)
-  Connectives: ~A  or  ¬A  or  !A      (negation)
-               A /\\ B  or  A & B       (conjunction)
-               A \\/ B  or  A | B       (disjunction)
-               A -> B  or  A → B       (implication)
-  Quantifiers: forall x. A  or  ∀x.A   (universal)
-               exists x. A  or  ∃x.A   (existential)
-  Constants:   True / T / ⊤            (top)
-               False / F / ⊥           (bottom — careful, F alone is a pred)
-  Parens:      (A)
+Accepts both course-style syntax and ASCII alternatives:
 
-Precedence (low to high): →, ∨, ∧, ¬, quantifiers, atoms
-→ is right-associative; ∧ and ∨ are left-associative.
+  Atoms:       P, Q, R, ...   (propositions, just 0-ary predicates)
+               P(x, a, f(x))  (with terms)
+  Constants:   a, b, c, ...   (lowercase starting a-e)
+  Variables:   x, y, z, ...   (lowercase starting u-z)
+  Functions:   f(t1, ..., tn) (lowercase with parens)
+  Connectives: ~A, !A, ¬A
+               A & B, A /\\ B
+               A | B, A \\/ B
+               A -> B, A → B
+  Quantifiers: forall x. A, ∀x.A
+               exists x. A, ∃x.A
+  Constants:   True, T, ⊤
+               False, ⊥        (note: F alone is parsed as a predicate name,
+                                use False or ⊥ if you want bot)
 
-Example input file:
+Precedence (lowest to highest): ->, |, &, ~, quantifiers, atoms.
+-> is right-associative, & and | are left-associative.
+
+Example file:
   forall x. (P(x) -> exists y. R(x, y))
   (A -> B) -> ((~A -> B) -> B)
 """
@@ -33,24 +34,27 @@ class ParseError(Exception):
     pass
 
 
-# ── Tokeniser ────────────────────────────────────────────────────────
+# Tokeniser
 
+# I list the patterns in order so longer matches (like ->) win over shorter
+# overlapping ones. The (?P<name>...) groups let me know which kind of token
+# matched.
 TOKEN_SPEC = [
-    ("FORALL",  r"(?:forall|∀)"),
-    ("EXISTS",  r"(?:exists|∃)"),
-    ("IMP",     r"(?:->|→)"),
-    ("AND",     r"(?:/\\|&|∧)"),
-    ("OR",      r"(?:\\/|\||∨)"),
-    ("NOT",     r"(?:~|!|¬)"),
-    ("TOP",     r"(?:True|⊤)"),
-    ("BOT",     r"(?:False|⊥)"),
-    ("DOT",     r"\."),
-    ("COMMA",   r","),
-    ("LPAREN",  r"\("),
-    ("RPAREN",  r"\)"),
+    ("FORALL",    r"(?:forall|∀)"),
+    ("EXISTS",    r"(?:exists|∃)"),
+    ("IMP",       r"(?:->|→)"),
+    ("AND",       r"(?:/\\|&|∧)"),
+    ("OR",        r"(?:\\/|\||∨)"),
+    ("NOT",       r"(?:~|!|¬)"),
+    ("TOP",       r"(?:True|⊤)"),
+    ("BOT",       r"(?:False|⊥)"),
+    ("DOT",       r"\."),
+    ("COMMA",     r","),
+    ("LPAREN",    r"\("),
+    ("RPAREN",    r"\)"),
     ("TURNSTILE", r"(?:⊢|\\?⊢|:-)"),
-    ("NAME",    r"[A-Za-z_][A-Za-z0-9_]*"),
-    ("SKIP",    r"[ \t]+"),
+    ("NAME",      r"[A-Za-z_][A-Za-z0-9_]*"),
+    ("SKIP",      r"[ \t]+"),
 ]
 
 _token_re = re.compile("|".join(f"(?P<{name}>{pattern})" for name, pattern in TOKEN_SPEC))
@@ -67,7 +71,8 @@ def tokenise(text: str) -> list[tuple[str, str]]:
     return tokens
 
 
-# ── Recursive descent parser ────────────────────────────────────────
+# Recursive descent parser
+# Standard textbook style. One method per precedence level.
 
 class Parser:
     def __init__(self, tokens: list[tuple[str, str]]):
@@ -82,29 +87,27 @@ class Parser:
     def consume(self, expected_kind: str | None = None) -> tuple[str, str]:
         tok = self.peek()
         if tok is None:
-            raise ParseError(f"Unexpected end of input, expected {expected_kind}")
+            raise ParseError(f"ran out of input, expected {expected_kind}")
         if expected_kind and tok[0] != expected_kind:
-            raise ParseError(f"Expected {expected_kind}, got {tok}")
+            raise ParseError(f"expected {expected_kind}, got {tok}")
         self.pos += 1
         return tok
 
     def at_end(self) -> bool:
         return self.pos >= len(self.tokens)
 
-    # formula ::= imp_expr
     def parse_formula(self) -> Formula:
         return self.parse_imp()
 
-    # imp_expr ::= or_expr ( '->' imp_expr )?    (right-assoc)
     def parse_imp(self) -> Formula:
+        # right-associative: A -> B -> C parses as A -> (B -> C)
         left = self.parse_or()
         if self.peek() and self.peek()[0] == "IMP":
             self.consume("IMP")
-            right = self.parse_imp()  # right-associative
+            right = self.parse_imp()
             return Imp(left, right)
         return left
 
-    # or_expr ::= and_expr ( '\\/' and_expr )*
     def parse_or(self) -> Formula:
         left = self.parse_and()
         while self.peek() and self.peek()[0] == "OR":
@@ -113,7 +116,6 @@ class Parser:
             left = Or(left, right)
         return left
 
-    # and_expr ::= unary ( '/\\' unary )*
     def parse_and(self) -> Formula:
         left = self.parse_unary()
         while self.peek() and self.peek()[0] == "AND":
@@ -122,8 +124,8 @@ class Parser:
             left = And(left, right)
         return left
 
-    # unary ::= '~' unary | quantifier | atom
     def parse_unary(self) -> Formula:
+        # ~ binds tighter than & and |, so it's at the unary level
         tok = self.peek()
         if tok and tok[0] == "NOT":
             self.consume("NOT")
@@ -136,18 +138,19 @@ class Parser:
         return self.parse_atom()
 
     def parse_quantifier(self, cls):
-        self.consume()  # consume FORALL/EXISTS
+        self.consume()  # forall or exists token
         var_tok = self.consume("NAME")
         var_name = var_tok[1]
         self.consume("DOT")
-        body = self.parse_unary()  # quantifier binds tightly
+        # the body of the quantifier binds tightly - "forall x. A & B"
+        # means forall x. (A & B) since the body is parsed as one unary
+        body = self.parse_unary()
         return cls(var_name, body)
 
-    # atom ::= TOP | BOT | NAME ( '(' term_list ')' )? | '(' formula ')'
     def parse_atom(self) -> Formula:
         tok = self.peek()
         if tok is None:
-            raise ParseError("Unexpected end of input in atom")
+            raise ParseError("ran out of input in atom")
 
         if tok[0] == "TOP":
             self.consume()
@@ -156,24 +159,27 @@ class Parser:
             self.consume()
             return Bot()
 
+        # parenthesised expression
         if tok[0] == "LPAREN":
             self.consume("LPAREN")
             f = self.parse_formula()
             self.consume("RPAREN")
             return f
 
+        # name = either a predicate (with or without args) or a quantifier
+        # already handled above
         if tok[0] == "NAME":
             name = self.consume("NAME")[1]
-            # Check if it's a predicate/function with arguments
             if self.peek() and self.peek()[0] == "LPAREN":
+                # predicate with arguments
                 self.consume("LPAREN")
                 args = self.parse_term_list()
                 self.consume("RPAREN")
                 return Pred(name, tuple(args))
             else:
-                # 0-ary predicate (proposition)
+                # 0-ary predicate
                 return Pred(name)
-        raise ParseError(f"Unexpected token in atom: {tok}")
+        raise ParseError(f"unexpected token in atom: {tok}")
 
     def parse_term_list(self) -> list[Term]:
         terms = [self.parse_term()]
@@ -185,20 +191,22 @@ class Parser:
     def parse_term(self) -> Term:
         tok = self.peek()
         if tok is None:
-            raise ParseError("Unexpected end of input in term")
+            raise ParseError("ran out of input in term")
         if tok[0] != "NAME":
-            raise ParseError(f"Expected name in term, got {tok}")
+            raise ParseError(f"expected name in term, got {tok}")
 
         name = self.consume("NAME")[1]
-        # Check for function application
+        # function application?
         if self.peek() and self.peek()[0] == "LPAREN":
             self.consume("LPAREN")
             args = self.parse_term_list()
             self.consume("RPAREN")
             return Fun(name, tuple(args))
 
-        # Heuristic: uppercase or single letter a-e => const; u-z => variable
-        # This can be overridden by context (quantifier binding)
+        # heuristic: if it starts with u-z it's a variable, otherwise a constant
+        # this works because in the textbook conventions, x/y/z are variables
+        # and a/b/c are constants. quantifier binding context can override
+        # this when needed.
         if name[0].islower() and name[0] in "uvwxyz":
             return Var(name)
         else:
@@ -206,19 +214,19 @@ class Parser:
 
 
 def parse_formula(text: str) -> Formula:
-    """Parse a single formula from text."""
+    """Parse a single formula from a string."""
     tokens = tokenise(text.strip())
     if not tokens:
-        raise ParseError("Empty formula")
+        raise ParseError("nothing to parse")
     parser = Parser(tokens)
     f = parser.parse_formula()
     if not parser.at_end():
-        raise ParseError(f"Unexpected tokens after formula: {parser.tokens[parser.pos:]}")
+        raise ParseError(f"junk left over after formula: {parser.tokens[parser.pos:]}")
     return f
 
 
 def parse_file(filename: str) -> list[Formula]:
-    """Parse a file with one formula per line. Blank lines and # comments are skipped."""
+    """One formula per line. Blank lines and # comments get skipped."""
     formulae = []
     with open(filename, "r") as fp:
         for line_no, line in enumerate(fp, 1):
@@ -228,13 +236,13 @@ def parse_file(filename: str) -> list[Formula]:
             try:
                 formulae.append(parse_formula(line))
             except ParseError as e:
+                # don't crash the whole file just because one line is broken
                 print(f"Parse error on line {line_no}: {e}")
                 print(f"  Line: {line}")
     return formulae
 
 
-# ── Quick test ───────────────────────────────────────────────────────
-
+# quick check
 if __name__ == "__main__":
     tests = [
         "A",

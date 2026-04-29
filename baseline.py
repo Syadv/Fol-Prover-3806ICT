@@ -1,33 +1,34 @@
 """
-Baseline implementation of Algorithm 2 (Page 67, Hou 2021).
+Algorithm 2 from Hou (2021), page 67. Backward proof search for
+first-order logic in LK'.
 
-Naïve backward proof search strategy for first-order logic using LK'.
+LK' rules (from Fig 2.3 in the textbook):
 
-LK' rules (Fig 2.3):
-  Zero-premise (close branch):
-    id:  Γ, A ⊢ A, Δ
-    ⊤R:  Γ ⊢ ⊤, Δ
-    ⊥L:  Γ, ⊥ ⊢ Δ
+Closing the branch:
+    id:   Gamma, A |- A, Delta
+    top R: Gamma |- top, Delta
+    bot L: Gamma, bot |- Delta
 
-  Non-branching logical:
-    ∧L:  Γ, A, B ⊢ Δ  /  Γ, A∧B ⊢ Δ
-    ∨R:  Γ ⊢ A, B, Δ  /  Γ ⊢ A∨B, Δ
-    →R:  Γ, A ⊢ B, Δ  /  Γ ⊢ A→B, Δ
-    ¬L:  Γ ⊢ A, Δ     /  Γ, ¬A ⊢ Δ
-    ¬R:  Γ, A ⊢ Δ     /  Γ ⊢ ¬A, Δ
-    ∀R:  Γ ⊢ A[a/x], Δ  /  Γ ⊢ ∀x.A, Δ   (a fresh)
-    ∃L:  Γ, A[a/x] ⊢ Δ  /  Γ, ∃x.A ⊢ Δ   (a fresh)
+Non-branching logical rules:
+    and L: Gamma, A, B |- Delta  /  Gamma, A and B |- Delta
+    or R:  Gamma |- A, B, Delta  /  Gamma |- A or B, Delta
+    imp R: Gamma, A |- B, Delta  /  Gamma |- A imp B, Delta
+    not L: Gamma |- A, Delta     /  Gamma, not A |- Delta
+    not R: Gamma, A |- Delta     /  Gamma |- not A, Delta
+    forall R: Gamma |- A[a/x], Delta / Gamma |- forall x.A, Delta  (a fresh)
+    exists L: Gamma, A[a/x] |- Delta / Gamma, exists x.A |- Delta  (a fresh)
 
-  Branching logical:
-    ∧R:  Γ ⊢ A, Δ   Γ ⊢ B, Δ  /  Γ ⊢ A∧B, Δ
-    ∨L:  Γ, A ⊢ Δ   Γ, B ⊢ Δ  /  Γ, A∨B ⊢ Δ
-    →L:  Γ ⊢ A, Δ   Γ, B ⊢ Δ  /  Γ, A→B ⊢ Δ
+Branching:
+    and R: Gamma |- A, Delta   AND   Gamma |- B, Delta
+    or L:  Gamma, A |- Delta   AND   Gamma, B |- Delta
+    imp L: Gamma |- A, Delta   AND   Gamma, B |- Delta
 
-  Quantifier instantiation (copy formula):
-    ∀L:  Γ, ∀x.A, A[t/x] ⊢ Δ  /  Γ, ∀x.A ⊢ Δ
-    ∃R:  Γ ⊢ ∃x.A, A[t/x], Δ  /  Γ ⊢ ∃x.A, Δ
+Quantifier instantiation (the formula stays around):
+    forall L: Gamma, forall x.A, A[t/x] |- Delta
+    exists R: Gamma |- exists x.A, A[t/x], Delta
 
-Side condition: in ∀R and ∃L, the fresh constant 'a' must not occur in the conclusion.
+Side condition: in forall R and exists L, the fresh constant must not
+already appear anywhere in the conclusion.
 """
 from __future__ import annotations
 from formula import *
@@ -35,7 +36,7 @@ import time
 
 
 class FreshNameGenerator:
-    """Generates fresh constant names: c0, c1, c2, ..."""
+    """Just hands out c0, c1, c2, ... each time you ask for a new constant."""
     def __init__(self):
         self.counter = 0
 
@@ -46,7 +47,6 @@ class FreshNameGenerator:
 
 
 class ProofResult:
-    """Result of a proof search."""
     def __init__(self, proved: bool, steps: int, time_s: float, depth: int = 0):
         self.proved = proved
         self.steps = steps
@@ -60,14 +60,16 @@ class ProofResult:
 
 class BaselineProver:
     """
-    Implements Algorithm 2: naïve backward proof search in LK'.
+    Algorithm 2 as written in the textbook.
 
-    A sequent is represented as (gamma, delta) where:
-      gamma = frozenset of formulae (antecedent)
-      delta = frozenset of formulae (succedent)
+    Sequents are stored as (gamma, delta) where gamma and delta are both
+    frozensets of formulae. Frozensets because we want quick membership
+    checks (for the id rule) and they're hashable so they could go in a
+    cache - which I don't actually do here, that's the improved version.
 
-    The search explores open branches. For each branch we track which
-    (formula, term) pairs have already been used for ∀L / ∃R instantiation.
+    The instantiation history dict tracks which (forall formula, term)
+    pairs have already been used so we don't keep instantiating with the
+    same term over and over.
     """
 
     def __init__(self, max_steps: int = 50000, max_depth: int = 100, timeout: float = 30.0):
@@ -79,7 +81,7 @@ class BaselineProver:
         self.start_time = 0.0
 
     def prove(self, formula: Formula) -> ProofResult:
-        """Try to prove that 'formula' is valid by searching for a derivation of ⊢ formula."""
+        """Try to prove the formula by searching for a derivation of |- formula."""
         self.steps = 0
         self.fresh = FreshNameGenerator()
         self.start_time = time.time()
@@ -93,6 +95,8 @@ class BaselineProver:
             elapsed = time.time() - self.start_time
             return ProofResult(False, self.steps, elapsed)
         except RecursionError:
+            # Python's default recursion limit hits before our depth limit
+            # on some really deep proofs - just treat it as a failed search
             elapsed = time.time() - self.start_time
             return ProofResult(False, self.steps, elapsed)
 
@@ -102,75 +106,81 @@ class BaselineProver:
     def _check_limits(self):
         self.steps += 1
         if self.steps > self.max_steps:
-            raise TimeoutError("Step limit exceeded")
+            raise TimeoutError("hit step limit")
         if time.time() - self.start_time > self.timeout:
-            raise TimeoutError("Time limit exceeded")
+            raise TimeoutError("hit time limit")
 
     def _search(self, gamma: frozenset, delta: frozenset,
                 inst_history: dict, depth: int) -> bool:
         """
-        Backward proof search on a single sequent (branch).
+        Search for a proof of this single sequent.
 
-        inst_history: maps (formula, side) -> set of terms already used for instantiation.
-                      side is 'L' for ∀L, 'R' for ∃R.
+        inst_history is a dict from (formula, side) to a set of terms
+        we've already used, so we don't waste time trying the same
+        instantiation twice on this branch. Side is 'L' for forall L,
+        'R' for exists R.
 
-        Returns True if this branch (and all sub-branches) can be closed.
+        Returns True if we managed to close all the branches.
         """
         self._check_limits()
 
         if depth > self.max_depth:
             return False
 
-        # ─── Step 1: id, ⊤R, ⊥L — close branch ─────────────────────
-        # id: if gamma ∩ delta is non-empty
+        # Step 1: try to close with id, top R, or bot L
+
+        # id: same formula on both sides
         if gamma & delta:
             return True
 
-        # ⊤R: if Top() in delta
+        # top R: top is on the right
         if Top() in delta:
             return True
 
-        # ⊥L: if Bot() in gamma
+        # bot L: bot is on the left
         if Bot() in gamma:
             return True
 
-        # ─── Step 2: Non-branching rules ∧L, ∨R, →R, ¬L, ¬R, ∀R, ∃L ──
-        # Apply the first applicable non-branching rule and recurse.
+        # Step 2: non-branching rules
+        # Algorithm 2 says "apply the first applicable one" so that's what
+        # we do. The order I check them in here is just whatever felt
+        # natural - the algorithm doesn't specify an ordering within step 2.
 
-        # ∧L: Γ, A∧B ⊢ Δ  =>  Γ, A, B ⊢ Δ
+        # and L: Gamma, A and B |- Delta  =>  Gamma, A, B |- Delta
         for f in gamma:
             if isinstance(f, And):
                 new_gamma = (gamma - {f}) | {f.left, f.right}
                 return self._search(new_gamma, delta, inst_history, depth + 1)
 
-        # ∨R: Γ ⊢ A∨B, Δ  =>  Γ ⊢ A, B, Δ
+        # or R: Gamma |- A or B, Delta  =>  Gamma |- A, B, Delta
         for f in delta:
             if isinstance(f, Or):
                 new_delta = (delta - {f}) | {f.left, f.right}
                 return self._search(gamma, new_delta, inst_history, depth + 1)
 
-        # →R: Γ ⊢ A→B, Δ  =>  Γ, A ⊢ B, Δ
+        # imp R: Gamma |- A -> B, Delta  =>  Gamma, A |- B, Delta
         for f in delta:
             if isinstance(f, Imp):
                 new_gamma = gamma | {f.left}
                 new_delta = (delta - {f}) | {f.right}
                 return self._search(new_gamma, new_delta, inst_history, depth + 1)
 
-        # ¬L: Γ, ¬A ⊢ Δ  =>  Γ ⊢ A, Δ
+        # not L: Gamma, ~A |- Delta  =>  Gamma |- A, Delta
         for f in gamma:
             if isinstance(f, Not):
                 new_gamma = gamma - {f}
                 new_delta = delta | {f.sub}
                 return self._search(new_gamma, new_delta, inst_history, depth + 1)
 
-        # ¬R: Γ ⊢ ¬A, Δ  =>  Γ, A ⊢ Δ
+        # not R: Gamma |- ~A, Delta  =>  Gamma, A |- Delta
         for f in delta:
             if isinstance(f, Not):
                 new_gamma = gamma | {f.sub}
                 new_delta = delta - {f}
                 return self._search(new_gamma, new_delta, inst_history, depth + 1)
 
-        # ∀R: Γ ⊢ ∀x.A, Δ  =>  Γ ⊢ A[a/x], Δ  (a fresh, must not occur in conclusion)
+        # forall R: Gamma |- forall x.A, Delta  =>  Gamma |- A[a/x], Delta
+        # 'a' has to be fresh (not appearing in the conclusion)
         for f in delta:
             if isinstance(f, Forall):
                 a = self.fresh.fresh()
@@ -178,7 +188,7 @@ class BaselineProver:
                 new_delta = (delta - {f}) | {new_body}
                 return self._search(gamma, new_delta, inst_history, depth + 1)
 
-        # ∃L: Γ, ∃x.A ⊢ Δ  =>  Γ, A[a/x] ⊢ Δ  (a fresh, must not occur in conclusion)
+        # exists L: same idea, opposite side
         for f in gamma:
             if isinstance(f, Exists):
                 a = self.fresh.fresh()
@@ -186,9 +196,10 @@ class BaselineProver:
                 new_gamma = (gamma - {f}) | {new_body}
                 return self._search(new_gamma, delta, inst_history, depth + 1)
 
-        # ─── Step 3: Branching rules ∧R, ∨L, →L ────────────────────
+        # Step 3: branching rules
+        # Each one creates two subgoals - we need both to close
 
-        # ∧R: Γ ⊢ A∧B, Δ  =>  (Γ ⊢ A, Δ) AND (Γ ⊢ B, Δ)
+        # and R: Gamma |- A and B, Delta  =>  (Gamma |- A, Delta) AND (Gamma |- B, Delta)
         for f in delta:
             if isinstance(f, And):
                 d1 = (delta - {f}) | {f.left}
@@ -199,7 +210,7 @@ class BaselineProver:
                 right_ok = self._search(gamma, d2, dict(inst_history), depth + 1)
                 return right_ok
 
-        # ∨L: Γ, A∨B ⊢ Δ  =>  (Γ, A ⊢ Δ) AND (Γ, B ⊢ Δ)
+        # or L: Gamma, A or B |- Delta  =>  (Gamma, A |- Delta) AND (Gamma, B |- Delta)
         for f in gamma:
             if isinstance(f, Or):
                 g1 = (gamma - {f}) | {f.left}
@@ -210,7 +221,7 @@ class BaselineProver:
                 right_ok = self._search(g2, delta, dict(inst_history), depth + 1)
                 return right_ok
 
-        # →L: Γ, A→B ⊢ Δ  =>  (Γ ⊢ A, Δ) AND (Γ, B ⊢ Δ)
+        # imp L: Gamma, A -> B |- Delta  =>  (Gamma |- A, Delta) AND (Gamma, B |- Delta)
         for f in gamma:
             if isinstance(f, Imp):
                 new_gamma = gamma - {f}
@@ -222,14 +233,15 @@ class BaselineProver:
                 right_ok = self._search(g2, delta, dict(inst_history), depth + 1)
                 return right_ok
 
-        # ─── Step 4: ∀L / ∃R with existing term ────────────────────
-        # Collect all terms currently in the sequent
+        # Step 4: forall L / exists R using a term we already have
         all_terms = collect_terms_sequent(gamma, delta)
         if not all_terms:
-            # If no terms at all, we might need to create a fresh one (step 5)
+            # nothing to instantiate with - skip ahead to step 5
             pass
         else:
-            # ∀L: Γ, ∀x.A ⊢ Δ  =>  Γ, ∀x.A, A[t/x] ⊢ Δ  (t not yet used)
+            # forall L: Gamma, forall x.A |- Delta  =>  Gamma, forall x.A, A[t/x] |- Delta
+            # The forall x.A stays around (that's why this can run forever
+            # if we're not careful)
             for f in gamma:
                 if isinstance(f, Forall):
                     key = (f, 'L')
@@ -237,18 +249,19 @@ class BaselineProver:
                     for t in all_terms:
                         if t not in used:
                             new_body = subst(f.sub, f.var, t)
-                            if new_body not in gamma:  # avoid no-ops
-                                new_gamma = gamma | {new_body}  # keep ∀x.A
+                            if new_body not in gamma:
+                                # actually adds something new
+                                new_gamma = gamma | {new_body}
                                 new_hist = dict(inst_history)
                                 new_hist[key] = used | {t}
                                 result = self._search(new_gamma, delta, new_hist, depth + 1)
                                 if result:
                                     return True
                             else:
-                                # Already have this instance, record and skip
+                                # we've already got this exact instance, no point retrying
                                 inst_history[key] = used | {t}
 
-            # ∃R: Γ ⊢ ∃x.A, Δ  =>  Γ ⊢ ∃x.A, A[t/x], Δ  (t not yet used)
+            # exists R: same idea, other side
             for f in delta:
                 if isinstance(f, Exists):
                     key = (f, 'R')
@@ -257,7 +270,7 @@ class BaselineProver:
                         if t not in used:
                             new_body = subst(f.sub, f.var, t)
                             if new_body not in delta:
-                                new_delta = delta | {new_body}  # keep ∃x.A
+                                new_delta = delta | {new_body}
                                 new_hist = dict(inst_history)
                                 new_hist[key] = used | {t}
                                 result = self._search(gamma, new_delta, new_hist, depth + 1)
@@ -266,7 +279,9 @@ class BaselineProver:
                             else:
                                 inst_history[key] = used | {t}
 
-        # ─── Step 5: ∀L / ∃R with fresh term ───────────────────────
+        # Step 5: forall L / exists R with a brand new fresh constant
+        # This is what makes Algorithm 2 not terminate on invalid formulae 
+        # we just keep generating new constants forever
         for f in gamma:
             if isinstance(f, Forall):
                 t = self.fresh.fresh()
@@ -291,34 +306,34 @@ class BaselineProver:
                 if result:
                     return True
 
-        # ─── Step 6: No rule applicable — stop ─────────────────────
+        # Step 6: nothing applies, give up on this branch
         return False
 
 
-# ── Convenience function ─────────────────────────────────────────────
-
 def prove(formula: Formula, **kwargs) -> ProofResult:
+    """Convenience wrapper - just makes a fresh prover and runs it."""
     prover = BaselineProver(**kwargs)
     return prover.prove(formula)
 
 
-# ── Quick tests ──────────────────────────────────────────────────────
+# Some quick tests to make sure the basic stuff works.
+# Run with: python3 baseline.py
 
 if __name__ == "__main__":
     from parser import parse_formula
 
     test_cases = [
-        # Propositional tautologies
+        # propositional tautologies, should all prove
         ("A -> A",                                      True),
         ("(A -> B) -> ((~A -> B) -> B)",                True),
         ("A -> (B -> A)",                               True),
         ("(A -> (B -> C)) -> (B -> (A -> C))",          True),
         ("(A -> B) -> ((B -> C) -> (A -> C))",          True),
         ("A | ~A",                                      True),   # excluded middle
-        ("~~A -> A",                                    True),   # double neg elim
+        ("~~A -> A",                                    True),   # double neg
         ("A -> ~~A",                                    True),
 
-        # Propositional non-tautologies
+        # propositional non-tautologies, should NOT prove
         ("A -> B",                                      False),
         ("A & B",                                       False),
         ("A | B -> A & B",                              False),
@@ -334,16 +349,16 @@ if __name__ == "__main__":
     ]
 
     print("=" * 70)
-    print("BASELINE PROVER — Algorithm 2 (Hou 2021, Page 67)")
+    print("Baseline (Algorithm 2 from Hou 2021, p67)")
     print("=" * 70)
 
     passed = 0
     for text, expected in test_cases:
         f = parse_formula(text)
         result = prove(f, max_steps=10000, max_depth=50, timeout=5.0)
-        ok = "✓" if result.proved == expected else "✗"
+        ok = "OK  " if result.proved == expected else "FAIL"
         if result.proved == expected:
             passed += 1
         print(f"  {ok}  {text:60s}  {result}")
 
-    print(f"\nPassed: {passed}/{len(test_cases)}")
+    print(f"\n{passed}/{len(test_cases)} passed")

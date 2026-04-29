@@ -1,8 +1,13 @@
 """
-Benchmark suite: dataset generation, loading, and comparison runner.
+Benchmark suite. Generates the test datasets, runs both provers
+on them, and saves results to a CSV.
 
-Generates multiple datasets of varying difficulty for evaluation.
-Also supports loading formulae from text files.
+The five datasets are:
+- propositional tautologies (built from templates)
+- propositional non-tautologies (also from templates)
+- valid FOL formulae (mostly from textbook standards)
+- invalid FOL formulae (converse directions of valid ones)
+- hard FOL stress tests (deeply nested quantifiers)
 """
 from __future__ import annotations
 from formula import *
@@ -15,12 +20,14 @@ import os
 import csv
 
 
-# ── Dataset generators ──────────────────────────────────────────────
+# Dataset generators
 
 def gen_propositional_tautologies(n: int = 30, seed: int = 42) -> list[tuple[str, Formula, bool]]:
     """
-    Generate propositional tautologies by construction.
-    Each formula is guaranteed valid.
+    Build n propositional tautologies from a list of templates.
+    Each template is a lambda that takes two atoms (and sometimes a third
+    via inner lambda) and returns a formula. The fixed seed is so the
+    benchmark is reproducible.
     """
     rng = random.Random(seed)
     atoms = [Pred(c) for c in "ABCDEFGH"]
@@ -29,33 +36,29 @@ def gen_propositional_tautologies(n: int = 30, seed: int = 42) -> list[tuple[str
     templates = [
         # p -> p
         lambda p, q: Imp(p, p),
-        # p | ~p  (excluded middle)
+        # excluded middle
         lambda p, q: Or(p, Not(p)),
-        # ~~p -> p  (double negation elimination)
+        # double negation elimination
         lambda p, q: Imp(Not(Not(p)), p),
-        # p -> ~~p
         lambda p, q: Imp(p, Not(Not(p))),
-        # (p -> q) -> (~q -> ~p)  (contrapositive)
+        # contrapositive
         lambda p, q: Imp(Imp(p, q), Imp(Not(q), Not(p))),
-        # (p -> q) -> ((~p -> q) -> q)
+        # the proof-by-cases pattern from the textbook
         lambda p, q: Imp(Imp(p, q), Imp(Imp(Not(p), q), q)),
-        # p -> (q -> p)
+        # K combinator / weakening
         lambda p, q: Imp(p, Imp(q, p)),
-        # (p -> (q -> r)) -> (q -> (p -> r))  (needs 3 atoms)
+        # permutation - this one needs three atoms so I grab a third
         lambda p, q: (lambda r: Imp(Imp(p, Imp(q, r)), Imp(q, Imp(p, r))))(rng.choice(atoms)),
-        # ((p -> q) & (q -> r)) -> (p -> r)  (transitivity)
+        # transitivity
         lambda p, q: (lambda r: Imp(And(Imp(p, q), Imp(q, r)), Imp(p, r)))(rng.choice(atoms)),
-        # (p & q) -> (q & p)  (commutativity)
+        # commutativity
         lambda p, q: Imp(And(p, q), And(q, p)),
-        # (p | q) -> (q | p)
         lambda p, q: Imp(Or(p, q), Or(q, p)),
-        # p -> (p | q)
+        # weakening
         lambda p, q: Imp(p, Or(p, q)),
-        # (p & q) -> p
         lambda p, q: Imp(And(p, q), p),
-        # (~p | q) -> (p -> q)  (material implication)
+        # material implication (both directions)
         lambda p, q: Imp(Or(Not(p), q), Imp(p, q)),
-        # (p -> q) -> (~p | q)
         lambda p, q: Imp(Imp(p, q), Or(Not(p), q)),
     ]
 
@@ -69,20 +72,20 @@ def gen_propositional_tautologies(n: int = 30, seed: int = 42) -> list[tuple[str
 
 
 def gen_propositional_non_tautologies(n: int = 20, seed: int = 43) -> list[tuple[str, Formula, bool]]:
-    """Generate formulae that are NOT tautologies."""
+    """Formulae that look like they might be valid but aren't."""
     rng = random.Random(seed)
     atoms = [Pred(c) for c in "ABCDEFGH"]
     results = []
 
     templates = [
-        lambda p, q: Imp(p, q),                          # p -> q
-        lambda p, q: And(p, q),                           # p & q
-        lambda p, q: Imp(Or(p, q), And(p, q)),            # p|q -> p&q
-        lambda p, q: Imp(Imp(p, q), Imp(q, p)),           # (p->q) -> (q->p)
-        lambda p, q: Imp(Imp(p, q), p),                   # (p->q) -> p
-        lambda p, q: And(Or(p, q), And(Not(p), Not(q))),  # (p|q) & (~p & ~q)
-        lambda p, q: Imp(Not(p), p),                      # ~p -> p
-        lambda p, q: And(p, Not(p)),                      # p & ~p  (contradiction)
+        lambda p, q: Imp(p, q),                          # p -> q (only valid if p implies q)
+        lambda p, q: And(p, q),                          # p & q
+        lambda p, q: Imp(Or(p, q), And(p, q)),           # converse of weakening
+        lambda p, q: Imp(Imp(p, q), Imp(q, p)),          # converse of implication
+        lambda p, q: Imp(Imp(p, q), p),                  # affirming the consequent style
+        lambda p, q: And(Or(p, q), And(Not(p), Not(q))), # contradicts itself
+        lambda p, q: Imp(Not(p), p),                     # ~p -> p
+        lambda p, q: And(p, Not(p)),                     # straight up contradiction
     ]
 
     for i in range(n):
@@ -95,7 +98,7 @@ def gen_propositional_non_tautologies(n: int = 20, seed: int = 43) -> list[tuple
 
 
 def gen_fol_valid(n: int = 25, seed: int = 44) -> list[tuple[str, Formula, bool]]:
-    """Generate valid FOL formulae."""
+    """Valid FOL formulae - mostly hand-picked from standard FOL textbooks."""
     results = []
     texts = [
         "forall x. P(x) -> forall x. P(x)",
@@ -133,21 +136,9 @@ def gen_fol_valid(n: int = 25, seed: int = 44) -> list[tuple[str, Formula, bool]
 
 
 def gen_fol_invalid(n: int = 15, seed: int = 45) -> list[tuple[str, Formula, bool]]:
-    """Generate invalid FOL formulae."""
-    results = []
-    texts = [
-        "exists x. P(x) -> forall x. P(x)",
-        "forall y. exists x. R(x, y) -> exists x. forall y. R(x, y)",
-        "(exists x. P(x)) & (exists x. Q(x)) -> exists x. (P(x) & Q(x))",
-        "forall x. (P(x) | Q(x)) -> (forall x. P(x)) | (forall x. Q(x))",
-        "(exists x. P(x) -> forall x. Q(x)) -> forall x. (P(x) -> Q(x))",
-        "exists x. P(x) -> P(x)",
-        "P(x) -> forall x. P(x)",
-        "forall x. P(x) | forall x. Q(x) -> forall x. (P(x) & Q(x))",
-        "exists x. (P(x) -> forall y. P(y))",  # this is actually valid (Drinker paradox)!
-    ]
-
-    # Fix: the drinker paradox IS valid, so let's only keep genuinely invalid ones
+    """Invalid FOL formulae - typically the converse of a valid one."""
+    # Note: I had the drinker paradox in here at first but it's actually
+    # valid (counterintuitively!) so I took it out.
     invalid_texts = [
         "exists x. P(x) -> forall x. P(x)",
         "forall y. exists x. R(x, y) -> exists x. forall y. R(x, y)",
@@ -157,6 +148,7 @@ def gen_fol_invalid(n: int = 15, seed: int = 45) -> list[tuple[str, Formula, boo
         "forall x. P(x) | forall x. Q(x) -> forall x. (P(x) & Q(x))",
     ]
 
+    results = []
     for text in invalid_texts[:n]:
         f = parse_formula(text)
         results.append((text, f, False))
@@ -166,20 +158,21 @@ def gen_fol_invalid(n: int = 15, seed: int = 45) -> list[tuple[str, Formula, boo
 
 def gen_hard_fol(seed: int = 46) -> list[tuple[str, Formula, bool]]:
     """
-    Hard FOL formulae that stress-test quantifier instantiation.
-    These require multiple ∀L / ∃R applications.
+    Stress tests - formulae that need multiple instantiations of forall L
+    or exists R to prove. These are where we expect to see the biggest
+    differences between baseline and improved.
     """
     results = []
     hard_valid = [
-        # Requires 2+ quantifier instantiations
+        # need 2+ instantiations
         "forall x. (P(x) -> Q(x)) -> (forall x. P(x) -> forall x. Q(x))",
         "forall x. (P(x) -> Q(x)) -> (exists x. P(x) -> exists x. Q(x))",
-        # Nested quantifiers
+        # nested quantifiers
         "forall x. forall y. (R(x, y) -> R(x, y))",
         "exists x. forall y. R(x, y) -> forall y. exists x. R(x, y)",
-        # Multiple predicates
+        # multiple predicates with chained implications
         "(forall x. (P(x) -> Q(x))) & (forall x. (Q(x) -> R(x))) -> (forall x. (P(x) -> R(x)))",
-        # De Morgan for quantifiers
+        # De Morgan duals for quantifiers
         "~(exists x. P(x)) -> forall x. ~P(x)",
         "~(forall x. P(x)) -> exists x. ~P(x)",
         "forall x. ~P(x) -> ~(exists x. P(x))",
@@ -203,11 +196,11 @@ def gen_hard_fol(seed: int = 46) -> list[tuple[str, Formula, bool]]:
     return results
 
 
-# ── Benchmark runner ─────────────────────────────────────────────────
+# Benchmark runner
 
 def run_benchmark(dataset_name: str, dataset: list[tuple[str, Formula, bool]],
                   timeout: float = 10.0, max_steps: int = 50000):
-    """Run both provers on a dataset and return comparison results."""
+    """Run both provers on a dataset and print + return the comparison."""
 
     print(f"\n{'='*80}")
     print(f"Dataset: {dataset_name}  ({len(dataset)} formulae, timeout={timeout}s)")
@@ -225,11 +218,12 @@ def run_benchmark(dataset_name: str, dataset: list[tuple[str, Formula, bool]],
     i_total_time = 0.0
 
     for idx, (text, formula, expected) in enumerate(dataset, 1):
-        # Baseline
+        # baseline first
         bp = BaselineProver(max_steps=max_steps, max_depth=100, timeout=timeout)
         br = bp.prove(formula)
 
-        # Improved
+        # then improved (give it more steps because iterative deepening
+        # adds overhead - this is fair, the time limit is the same)
         ip = ImprovedProver(max_steps=max_steps * 2, max_depth=200, timeout=timeout)
         ir = ip.prove(formula)
 
@@ -244,7 +238,7 @@ def run_benchmark(dataset_name: str, dataset: list[tuple[str, Formula, bool]],
 
         b_status = "PROVED" if br.proved else "UNKNOWN"
         i_status = "PROVED" if ir.proved else "UNKNOWN"
-        match = "✓" if b_ok and i_ok else ("B✗" if not b_ok else "I✗")
+        match = "OK" if b_ok and i_ok else ("B?" if not b_ok else "I?")
 
         print(f"{idx:3d}  {'valid' if expected else 'invalid':>8}  "
               f"{b_status:>10}  {br.time_s:>7.4f}s  {br.steps:>8d}  "
@@ -258,8 +252,8 @@ def run_benchmark(dataset_name: str, dataset: list[tuple[str, Formula, bool]],
 
     print("-" * 95)
     print(f"Summary:")
-    print(f"  Baseline — Correct: {b_correct}/{len(dataset)}, Proved: {b_proved}, Time: {b_total_time:.4f}s")
-    print(f"  Improved — Correct: {i_correct}/{len(dataset)}, Proved: {i_proved}, Time: {i_total_time:.4f}s")
+    print(f"  Baseline - Correct: {b_correct}/{len(dataset)}, Proved: {b_proved}, Time: {b_total_time:.4f}s")
+    print(f"  Improved - Correct: {i_correct}/{len(dataset)}, Proved: {i_proved}, Time: {i_total_time:.4f}s")
 
     if b_total_time > 0:
         speedup = b_total_time / max(i_total_time, 0.0001)
@@ -269,8 +263,9 @@ def run_benchmark(dataset_name: str, dataset: list[tuple[str, Formula, bool]],
 
 
 def save_results_csv(all_results: dict, filename: str):
-    """Save all benchmark results to CSV."""
-    with open(filename, 'w', newline='') as f:
+    """Dump everything to a CSV. utf-8 encoding so the unicode arrows
+    in formulae don't cause problems on Windows."""
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['dataset', 'formula', 'expected', 'baseline_proved', 'baseline_time',
                          'baseline_steps', 'improved_proved', 'improved_time', 'improved_steps'])
@@ -283,7 +278,7 @@ def save_results_csv(all_results: dict, filename: str):
     print(f"\nResults saved to {filename}")
 
 
-# ── Main ─────────────────────────────────────────────────────────────
+# Main
 
 if __name__ == "__main__":
     print("=" * 80)
@@ -303,9 +298,9 @@ if __name__ == "__main__":
         results = run_benchmark(name, dataset, timeout=10.0, max_steps=50000)
         all_results[name] = results
 
-    save_results_csv(all_results, "/home/claude/prover/benchmark_results.csv")
+    save_results_csv(all_results, "benchmark_results.csv")
 
-    # Print overall summary
+    # overall summary at the end
     print("\n" + "=" * 80)
     print("OVERALL SUMMARY")
     print("=" * 80)
